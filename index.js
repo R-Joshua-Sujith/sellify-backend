@@ -1,0 +1,554 @@
+const express = require("express");
+const mongoose = require("mongoose");
+const dotenv = require("dotenv");
+const cors = require("cors");
+const nodemailer = require('nodemailer');
+const otpGenerator = require('otp-generator');
+const Category = require("./models/Category");
+const CategoryModel = require("./models/Category");
+const BrandModel = require("./models/Brands");
+const ProductModel = require("./models/Product")
+const UserModel = require("./models/User")
+const OrderModel = require("./models/Order")
+dotenv.config();
+const app = express();
+app.use(express.json());
+app.use(cors());
+
+mongoose.connect(process.env.MONGO_URL)
+    .then(() => console.log("DB Connection Successful"))
+    .catch((err) => console.log(err))
+
+
+app.get("/get-all-categories", async (req, res) => {
+    try {
+        // Fetch all categories from the database
+        const allCategories = await Category.find();
+
+        // Respond with the array of categories
+        res.status(200).json(allCategories);
+    } catch (error) {
+        // Handle errors
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get("/get-category/:id", async (req, res) => {
+    try {
+        // Fetch all categories from the database
+        const category = await Category.findById(req.params.id);
+        // Respond with the array of categories
+        res.status(200).json(category);
+    } catch (error) {
+        // Handle errors
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get("/get-all-category-types", async (req, res) => {
+    try {
+        // Fetch all categories from the database and select only the category_type field
+        const allCategoryTypes = await Category.find().select('_id category_type');
+        // Extract the category_type values from the array of documents
+        // Respond with the array of category_type values
+        res.status(200).json(allCategoryTypes);
+    } catch (error) {
+        // Handle errors
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post("/add-category", async (req, res) => {
+    try {
+        const newCategory = await CategoryModel.create(req.body);
+        res.status(201).json({ message: 'Category Added Successfully' });
+    } catch (error) {
+        if (error.code === 11000 && error.keyPattern && error.keyPattern.category_type) {
+            res.status(400).json({ error: 'Category already exists' })
+        } else {
+            res.status(500).json({ error: "Internal Server Error" })
+        }
+
+    }
+})
+
+app.put('/updateCategory/:id', async (req, res) => {
+    try {
+        const category = await CategoryModel.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        if (!category) {
+            return res.status(404).json({ error: 'Category not found' });
+        }
+        res.json({ message: 'Category updated successfully' });
+    } catch (error) {
+        if (error.code === 11000 && error.keyPattern && error.keyPattern.category_type) {
+            res.status(400).json({ error: 'Brand already exists' })
+        } else {
+            res.status(500).json({ error: "Internal Server error" })
+        }
+    }
+});
+
+
+
+app.delete("/delete-category/:id", async (req, res) => {
+    try {
+        await Category.findByIdAndDelete(req.params.id);
+        res.status(200).json({ message: 'Category Deleted Successfully' });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/api/category/:category_type', async (req, res) => {
+    try {
+        const { category_type } = req.params;
+
+        // Find the category that matches the specified category_type
+        const category = await Category.findOne({ category_type });
+
+        if (!category) {
+            return res.status(404).json({ error: 'Category not found' });
+        }
+
+        // Extract attributes and sections from the category
+        const { attributes, sections } = category;
+
+        res.json({ category_type, attributes, sections });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+
+
+app.post("/add-brand", async (req, res) => {
+    try {
+        const brand = await BrandModel.create(req.body);
+        res.status(201).json({ message: 'Brand Added Successfully' })
+    } catch (error) {
+        if (error.code === 11000 && error.keyPattern && error.keyPattern.brandName) {
+            res.status(400).json({ error: 'Brand already exists' })
+        } else {
+            res.status(500).json({ error: "Internal Server error" })
+        }
+    }
+})
+
+app.get('/brands', async (req, res) => {
+    try {
+        // Fetch all brands with only brandName and _id fields
+        const brands = await BrandModel.find({}, 'brandName');
+
+        // Send the response with the list of brand names and ids
+        res.json(brands);
+    } catch (error) {
+        // Handle errors
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/brands/:id', async (req, res) => {
+    try {
+        const brand = await BrandModel.findById(req.params.id);
+        if (!brand) {
+            return res.status(404).json({ error: 'Brand not found' });
+        }
+
+        // Filter out keys with empty arrays
+        const filteredSeries = Object.keys(brand.series)
+            .filter((key) => brand.series[key].length > 0)
+            .reduce((obj, key) => {
+                obj[key] = brand.series[key];
+                return obj;
+            }, {});
+
+        brand.series = filteredSeries;
+
+        res.json(brand);
+    } catch (error) {
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+app.put("/edit-brand/:id", async (req, res) => {
+    try {
+        const brand = await BrandModel.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        if (!brand) {
+            return res.status(404).json({ error: 'Brand not found' });
+        }
+        res.json({ message: 'Brand edited Successfully' });
+    } catch (error) {
+        res.status(400).json({ error: "Internal Server error" });
+    }
+})
+
+app.delete('/delete-brand/:id', async (req, res) => {
+    try {
+        const brand = await BrandModel.findByIdAndDelete(req.params.id);
+        if (!brand) {
+            return res.status(404).json({ error: 'Brand not found' });
+        }
+        res.json({ message: 'Brand deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+app.get('/brands-category/:categoryType', async (req, res) => {
+    try {
+        const categoryType = req.params.categoryType;
+
+        // Find all brands that have the specified categoryType in their series object
+        const brands = await BrandModel.find({ [`series.${categoryType}`]: { $exists: true, $not: { $size: 0 } } });
+
+        if (brands.length === 0) {
+            return res.status(404).json({ error: 'No brands found for the specified category type' });
+        }
+
+        // Extract only the _id and brandName fields from each brand
+        const brandNames = brands.map(brand => ({ _id: brand._id, brandName: brand.brandName, brandImage: brand.brandImage }));
+
+        res.json(brandNames);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+
+app.get('/series/:brandName/:categoryType', async (req, res) => {
+    try {
+        const { brandName, categoryType } = req.params;
+
+        // Find the brand that matches the specified brandName
+        const brand = await BrandModel.findOne({ brandName });
+
+        if (!brand) {
+            return res.status(404).json({ error: 'Brand not found' });
+        }
+
+        // Check if the specified categoryType exists in the brand's series object
+        if (!brand.series[categoryType]) {
+            return res.status(404).json({ error: 'Category type not found for this brand' });
+        }
+
+        // Fetch all seriesName values under the specified categoryType
+        const seriesNames = brand.series[categoryType].map(seriesItem => seriesItem.seriesName);
+
+        res.json(seriesNames);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+
+// API endpoint to list all models under a specific category, brand, and series
+app.get('/models/:category/:brand/:series', async (req, res) => {
+    try {
+        const { category, brand, series } = req.params;
+
+        // Find the brand that matches the specified brandName
+        const brandData = await BrandModel.findOne({ brandName: brand });
+
+        if (!brandData) {
+            return res.status(404).json({ error: 'Brand not found' });
+        }
+
+        // Check if the specified category exists in the brand's series object
+        if (!brandData.series[category]) {
+            return res.status(404).json({ error: 'Category not found for this brand' });
+        }
+
+        // Find the series that matches the specified seriesName
+        const seriesData = brandData.series[category].find((item) => item.seriesName === series);
+
+        if (!seriesData) {
+            return res.status(404).json({ error: 'Series not found for this category' });
+        }
+
+        // Extract and return the models for the specified series
+        const models = seriesData.models;
+        res.json(models);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+
+
+
+app.post('/create-products', async (req, res) => {
+    try {
+        const { productImage, productName, basePrice, variant, brandName, seriesName, categoryType, attributes, sections, model } = req.body;
+        const newProduct = new ProductModel({ productImage, productName, basePrice, variant, brandName, seriesName, categoryType, attributes, sections, model });
+        const savedProduct = await newProduct.save();
+        res.json(savedProduct);
+    } catch (error) {
+        if (error.code === 11000 && error.keyPattern && error.keyPattern.productName) {
+            res.status(400).json({ error: 'Product already exists' })
+        } else {
+            res.status(500).json({ error: "Internal Server error" })
+        }
+    }
+});
+
+// Assuming you have your ProductModel and app.post('/create-products') code above
+
+// Add a new route to get products based on categoryType and brandName
+app.get('/get-products/:categoryType/:brandName', async (req, res) => {
+    try {
+        const { categoryType, brandName } = req.params;
+
+        if (!categoryType || !brandName) {
+            return res.status(400).json({ error: 'Both categoryType and brandName are required parameters' });
+        }
+
+        const products = await ProductModel.find({ categoryType, brandName });
+        res.json(products);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server error' });
+    }
+});
+
+
+// app.get('/get-all-products', async (req, res) => {
+//     try {
+//         const allProducts = await ProductModel.find();
+//         res.json(allProducts);
+//     } catch (error) {
+//         res.status(500).json({ error: error.message });
+//     }
+// });
+
+app.get('/get-all-products', async (req, res) => {
+    try {
+        const { page = 1, pageSize = 5 } = req.query;
+        const skip = (page - 1) * pageSize;
+
+        const allProducts = await ProductModel.find().skip(skip).limit(parseInt(pageSize));
+        const totalProducts = await ProductModel.countDocuments();
+
+        res.json({
+            totalRows: totalProducts,
+            data: allProducts,
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/products/:productId', async (req, res) => {
+    try {
+        const productId = req.params.productId;
+
+        // Validate that the provided ID is a valid MongoDB ObjectId
+        if (!mongoose.Types.ObjectId.isValid(productId)) {
+            return res.status(400).json({ error: 'Invalid product ID' });
+        }
+
+        const product = await ProductModel.findById(productId);
+
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        res.json(product);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.put('/update-product/:productId', async (req, res) => {
+    const { productId } = req.params;
+    const updateData = req.body;
+
+    try {
+        // Find the product by _id
+        const existingProduct = await ProductModel.findById(productId);
+
+        if (!existingProduct) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        // Update the product data
+        Object.assign(existingProduct, updateData);
+
+        // Save the updated product
+        const updatedProduct = await existingProduct.save();
+
+        res.json(updatedProduct);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+app.delete('/delete-product/:productId', async (req, res) => {
+    const { productId } = req.params;
+
+    try {
+        // Find and remove the product by _id
+        const deletedProduct = await ProductModel.findByIdAndDelete(productId);
+
+        if (!deletedProduct) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        res.json({ message: 'Product deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+app.post('/send-otp', async (req, res) => {
+    const { email } = req.body;
+
+    // Find user by email or create a new user
+    let user = await UserModel.findOne({ email });
+
+    if (!user) {
+        // Create a new user if not found
+        user = new UserModel({ email });
+    }
+
+    // Generate OTP
+    const otp = otpGenerator.generate(6, { digits: true, alphabets: false, upperCase: false });
+    const otpExpiry = Date.now() + 600000; // 10 minutes
+
+    // Save OTP and its expiry to user
+    user.otp = otp;
+    user.otpExpiry = otpExpiry;
+
+    try {
+        await user.save();
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Failed to save user' });
+    }
+
+    // Send email with OTP
+    const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: 'joshuasujith14@gmail.com',
+            pass: 'ncbbbbtrcqqjuvpc',
+        },
+    });
+
+    const mailOptions = {
+        from: 'joshuasujith14@gmail.com',
+        to: email,
+        subject: 'OTP Verification',
+        text: `You are receiving this email for OTP verification in Sellify. Your OTP is: ${otp}`,
+    };
+
+    transporter.sendMail(mailOptions, (error, info) => {
+        if (error) {
+            console.log(error);
+            return res.status(500).json({ message: 'Failed to send OTP' });
+        }
+
+        res.json({ message: 'OTP Sent' });
+    });
+});
+
+app.post('/login', async (req, res) => {
+    const { otp, email } = req.body;
+
+    // Find user by reset token, OTP, and email
+    const user = await UserModel.findOne({
+        email,
+        otp,
+        otpExpiry: { $gt: Date.now() },
+    });
+
+    if (!user) {
+        return res.status(400).json({ message: 'Invalid OTP or email' });
+    }
+
+    // Clear OTP and OTP expiry after successful reset
+    user.otp = undefined;
+    user.otpExpiry = undefined;
+
+    try {
+        await user.save();
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Server Error' });
+    }
+
+    res.json({ message: 'Login Successful' });
+});
+
+
+app.post('/create-order', async (req, res) => {
+    try {
+        // Extract order details from the request body
+        const {
+            firstName,
+            lastName,
+            email,
+            phone,
+            addPhone,
+            address,
+            zipCode,
+            city,
+            country,
+            scheduledPickup,
+            productDetails,
+            options
+        } = req.body.updatedOrderDetails;
+
+        // Create a new order instance using the OrderModel
+        const newOrder = new OrderModel({
+            firstName,
+            lastName,
+            email,
+            phone,
+            addPhone,
+            address,
+            zipCode,
+            city,
+            country,
+            scheduledPickup,
+            productDetails,
+            options
+        });
+
+        // Save the new order to the database
+        const savedOrder = await newOrder.save();
+
+        res.status(201).json({ message: 'Order created successfully', order: savedOrder });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+app.get('/get-all-orders', async (req, res) => {
+    try {
+        const { page = 1, pageSize = 5 } = req.query;
+        const skip = (page - 1) * pageSize;
+
+        const allOrders = await OrderModel.find().skip(skip).limit(parseInt(pageSize));
+        const totalOrders = await OrderModel.countDocuments();
+
+        res.json({
+            totalRows: totalOrders,
+            data: allOrders,
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+app.listen(5000, () => {
+    console.log("Backend Server is Running")
+})

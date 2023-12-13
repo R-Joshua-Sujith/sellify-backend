@@ -4,12 +4,16 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const nodemailer = require('nodemailer');
 const otpGenerator = require('otp-generator');
+const multer = require('multer');
+const XLSX = require('xlsx');
+const axios = require("axios")
 const Category = require("./models/Category");
 const CategoryModel = require("./models/Category");
 const BrandModel = require("./models/Brands");
 const ProductModel = require("./models/Product")
 const UserModel = require("./models/User")
 const OrderModel = require("./models/Order")
+const ItemModel = require("./models/Item")
 dotenv.config();
 const app = express();
 app.use(express.json());
@@ -547,6 +551,268 @@ app.get('/get-all-orders', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
+app.post('/upload', upload.single('file'), async (req, res) => {
+    try {
+        // Process the uploaded file (assuming it's in XLSX format)
+        const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+        // Process the data and update/create records in MongoDB
+        for (const row of data.slice(1)) {
+            // Assuming the unique identifier is in the first column (index 0)
+            const uniqueIdentifier = row[0];
+
+            // Check if an entry with the same unique identifier exists
+            const existingItem = await ItemModel.findOne({ _id: uniqueIdentifier });
+
+            if (existingItem) {
+                // Update existing entry
+                existingItem.name = row[1];
+                existingItem.age = row[2];
+                existingItem.address.city = row[3];
+                existingItem.address.country = row[4];
+                await existingItem.save();
+            } else {
+                // Create a new entry with MongoDB's default _id
+                const newItem = new ItemModel({
+                    name: row[1],
+                    age: row[2],
+                    address: {
+                        city: row[3],
+                        country: row[4],
+                        state: row[5]
+                    }
+                });
+                await newItem.save();
+            }
+        }
+
+        res.status(200).send('File uploaded and data processed successfully.');
+    } catch (error) {
+        console.error(error);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+app.get('/download', async (req, res) => {
+    try {
+        const items = await ItemModel.find();
+
+        // Create a worksheet
+        const ws = XLSX.utils.json_to_sheet(items.map(item => ({
+            ID: item._id.toString(), // Convert ObjectId to string
+            Name: item.name,
+            Age: item.age,
+            City: item.address.city,
+            Country: item.address.country,
+        })));
+
+        // Create a workbook
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Items');
+
+        // Save to buffer
+        const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+
+        // Set response headers
+        res.setHeader('Content-Disposition', 'attachment; filename=items.xlsx');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+        // Send the file as the response
+        res.send(buffer);
+    } catch (error) {
+        console.error(error);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+
+app.get('/generate-excel/:categoryType', async (req, res) => {
+    try {
+        const categoryType = req.params.categoryType;
+
+        // Make an API call to fetch the category document based on categoryType
+        const response = await axios.get(`http://localhost:5000/api/category/${categoryType}`);
+        const category = response.data;
+
+        // Check if the category document is empty or undefined
+        if (!category) {
+            return res.status(404).json({ error: 'Category not found for the given categoryType.' });
+        }
+        const headers = ['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'productImage', 'variant', 'basePrice']
+
+        // Extract attributes
+        if (category.attributes) {
+            category.attributes.forEach(attribute => {
+
+                attribute.options.forEach(option => {
+
+                    headers.push(`${option.optionHeading}`);
+                });
+            });
+        }
+
+        // Extract sections
+        if (category.sections) {
+            category.sections.forEach(section => {
+
+                section.options.forEach(option => {
+                    headers.push(`${option.optionHeading}`);
+                });
+            });
+        }
+
+        // Create an empty worksheet
+        const ws = XLSX.utils.aoa_to_sheet([headers]);
+
+        // Create a workbook and add the worksheet
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+
+        // Save the workbook to a file
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=excel_template.xlsx`);
+        res.send(excelBuffer);
+    } catch (error) {
+        console.error('Error fetching category document:', error.message);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+
+
+app.post('/api/products/bulk-upload', upload.single('file'), async (req, res) => {
+    try {
+        const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const excelData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+        // Check for empty Excel data
+        if (excelData.length === 0) {
+            return res.status(400).json({ error: 'Excel data is empty.' });
+        }
+        const allHeaders = excelData[0];
+
+        const dynamic = allHeaders.filter((item) => !['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'productImage', 'variant', 'basePrice'].includes(item));
+
+        for (const row of excelData.slice(1)) {
+            const uniqueIdentifier = row[0];
+            const existingItem = await ProductModel.findOne({ _id: uniqueIdentifier })
+            const dynamicOptions = [];
+            let i = 8;
+            for (let x of dynamic) {
+                dynamicOptions.push({
+                    optionHeading: x,
+                    optionValue: row[i]
+                })
+                i++;
+            }
+            if (existingItem) {
+
+                existingItem.categoryType = row[1];
+                existingItem.brandName = row[2];
+                existingItem.seriesName = row[3];
+                existingItem.model = row[4];
+                existingItem.productImage = row[5];
+                existingItem.variant = row[6];
+                existingItem.basePrice = row[7];
+                existingItem.dynamicFields = dynamicOptions;
+
+                await existingItem.save();
+            } else {
+                const newProduct = new ProductModel({
+                    categoryType: row[1],
+                    brandName: row[2],
+                    seriesName: row[3],
+                    model: row[4],
+                    productImage: row[5],
+                    variant: row[6],
+                    basePrice: row[7],
+                    dynamicFields: dynamicOptions,
+                })
+                await newProduct.save();
+            }
+        }
+
+
+        res.status(200).json({ message: 'Bulk upload successful' });
+    } catch (error) {
+        console.error('Error during bulk upload:', error.message);
+        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    }
+});
+
+app.get('/api/products/bulk-download/:categoryType', async (req, res) => {
+    try {
+        // Fetch all products from the database
+        const categoryType = req.params.categoryType;
+        if (!categoryType) {
+            return res.status(400).json({ error: 'Category type is required in the route parameters.' });
+        }
+        const products = await ProductModel.find({ categoryType });
+        // Check if there are any products
+        if (products.length === 0) {
+            return res.status(404).json({ error: 'No products found for bulk download.' });
+        }
+
+        // Create an array to store Excel data
+        const excelData = [];
+
+        // Add headers to the Excel data
+        const headers = ['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'productImage', 'variant', 'basePrice'];
+
+        // Assuming dynamicFields is an array in each product document
+        if (products[0].dynamicFields) {
+            products[0].dynamicFields.forEach(dynamicField => {
+                headers.push(dynamicField.optionHeading);
+            });
+        }
+
+        excelData.push(headers);
+
+        // Add product data to the Excel data
+        products.forEach(product => {
+            const rowData = [product._id.toString(), product.categoryType, product.brandName, product.seriesName, product.model, product.productImage, product.variant, product.basePrice];
+
+            // Add dynamic field values to the row
+            if (product.dynamicFields) {
+                product.dynamicFields.forEach(dynamicField => {
+                    rowData.push(dynamicField.optionValue);
+                });
+            }
+
+            excelData.push(rowData);
+        });
+
+        // Create a worksheet
+        const ws = XLSX.utils.aoa_to_sheet(excelData);
+
+        // Create a workbook and add the worksheet
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+
+        // Save the workbook to a file
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+
+        // Set headers for the response
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=bulk_download.xlsx');
+
+        // Send the Excel file as the response
+        res.send(excelBuffer);
+    } catch (error) {
+        console.error('Error during bulk download:', error.message);
+        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    }
+});
+
+
 
 
 app.listen(5000, () => {

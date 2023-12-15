@@ -288,8 +288,8 @@ app.get('/models/:category/:brand/:series', async (req, res) => {
 
 app.post('/create-products', async (req, res) => {
     try {
-        const { productImage, productName, basePrice, variant, brandName, seriesName, categoryType, attributes, sections, model } = req.body;
-        const newProduct = new ProductModel({ productImage, productName, basePrice, variant, brandName, seriesName, categoryType, attributes, sections, model });
+        const { productImage, basePrice, variant, brandName, seriesName, categoryType, model, dynamicFields } = req.body;
+        const newProduct = new ProductModel({ productImage, basePrice, variant, brandName, seriesName, categoryType, model, dynamicFields });
         const savedProduct = await newProduct.save();
         res.json(savedProduct);
     } catch (error) {
@@ -503,7 +503,6 @@ app.post('/create-order', async (req, res) => {
             address,
             zipCode,
             city,
-            country,
             scheduledPickup,
             productDetails,
             options
@@ -519,7 +518,6 @@ app.post('/create-order', async (req, res) => {
             address,
             zipCode,
             city,
-            country,
             scheduledPickup,
             productDetails,
             options
@@ -643,7 +641,7 @@ app.get('/generate-excel/:categoryType', async (req, res) => {
         if (!category) {
             return res.status(404).json({ error: 'Category not found for the given categoryType.' });
         }
-        const headers = ['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'productImage', 'variant', 'basePrice']
+        const headers = ['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'variant', 'basePrice', 'productImage']
 
         // Extract attributes
         if (category.attributes) {
@@ -699,7 +697,7 @@ app.post('/api/products/bulk-upload', upload.single('file'), async (req, res) =>
         }
         const allHeaders = excelData[0];
 
-        const dynamic = allHeaders.filter((item) => !['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'productImage', 'variant', 'basePrice'].includes(item));
+        const dynamic = allHeaders.filter((item) => !['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'variant', 'basePrice', 'productImage'].includes(item));
 
         for (const row of excelData.slice(1)) {
             const uniqueIdentifier = row[0];
@@ -719,9 +717,9 @@ app.post('/api/products/bulk-upload', upload.single('file'), async (req, res) =>
                 existingItem.brandName = row[2];
                 existingItem.seriesName = row[3];
                 existingItem.model = row[4];
-                existingItem.productImage = row[5];
-                existingItem.variant = row[6];
-                existingItem.basePrice = row[7];
+                existingItem.variant = row[5];
+                existingItem.basePrice = row[6];
+                existingItem.productImage = row[7];
                 existingItem.dynamicFields = dynamicOptions;
 
                 await existingItem.save();
@@ -731,9 +729,9 @@ app.post('/api/products/bulk-upload', upload.single('file'), async (req, res) =>
                     brandName: row[2],
                     seriesName: row[3],
                     model: row[4],
-                    productImage: row[5],
-                    variant: row[6],
-                    basePrice: row[7],
+                    variant: row[5],
+                    basePrice: row[6],
+                    productImage: row[7],
                     dynamicFields: dynamicOptions,
                 })
                 await newProduct.save();
@@ -765,7 +763,7 @@ app.get('/api/products/bulk-download/:categoryType', async (req, res) => {
         const excelData = [];
 
         // Add headers to the Excel data
-        const headers = ['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'productImage', 'variant', 'basePrice'];
+        const headers = ['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'variant', 'basePrice', 'productImage'];
 
         // Assuming dynamicFields is an array in each product document
         if (products[0].dynamicFields) {
@@ -778,7 +776,7 @@ app.get('/api/products/bulk-download/:categoryType', async (req, res) => {
 
         // Add product data to the Excel data
         products.forEach(product => {
-            const rowData = [product._id.toString(), product.categoryType, product.brandName, product.seriesName, product.model, product.productImage, product.variant, product.basePrice];
+            const rowData = [product._id.toString(), product.categoryType, product.brandName, product.seriesName, product.model, product.variant, product.basePrice, product.productImage];
 
             // Add dynamic field values to the row
             if (product.dynamicFields) {

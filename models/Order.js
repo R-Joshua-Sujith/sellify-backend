@@ -9,7 +9,6 @@ const orderSchema = new mongoose.Schema({
     address: { type: String, required: true },
     zipCode: { type: String, required: true },
     city: { type: String, required: true },
-    country: { type: String, required: true },
     scheduledPickup: {
         pickupDate: { type: Date, required: true },
         pickupTime: { type: String, required: true },

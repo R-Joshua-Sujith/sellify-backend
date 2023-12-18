@@ -19,7 +19,17 @@ const orderSchema = new mongoose.Schema({
     },
     options: {
         type: mongoose.Schema.Types.Mixed
-    }
+    },
+    status: {
+        type: String,
+        required: true,
+        default: 'new'
+    },
+    imeiNumber: { type: String, required: false },
+    finalPrice: { type: String, required: false },
+    deviceBill: { type: Buffer, required: false }, // Change to Buffer type
+    idCard: { type: Buffer, required: false }, // Change to Buffer type
+    deviceImage: { type: Buffer, required: false }, // Change to Buffer type
 });
 
 const OrderModel = mongoose.model('Order', orderSchema);

@@ -13,16 +13,26 @@ const BrandModel = require("./models/Brands");
 const ProductModel = require("./models/Product")
 const UserModel = require("./models/User")
 const OrderModel = require("./models/Order")
-const ItemModel = require("./models/Item")
+const fs = require('fs');
+const path = require('path');
+const pdf = require('html-pdf');
+const bodyParser = require('body-parser');
+
 dotenv.config();
 const app = express();
 app.use(express.json());
 app.use(cors());
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
 mongoose.connect(process.env.MONGO_URL)
     .then(() => console.log("DB Connection Successful"))
     .catch((err) => console.log(err))
 
+
+
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
 
 app.get("/get-all-categories", async (req, res) => {
     try {
@@ -533,12 +543,135 @@ app.post('/create-order', async (req, res) => {
     }
 });
 
+app.put('/api/orders/:orderId/processing', async (req, res) => {
+    const { orderId } = req.params;
+
+    try {
+        const order = await OrderModel.findById(orderId);
+
+        if (!order) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+
+        // Update the status
+        order.status = 'processing';
+        await order.save();
+
+        return res.status(200).json({ message: 'Order status updated to processing' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.put('/:orderId/cancel', async (req, res) => {
+    const { orderId } = req.params;
+    const { cancellationReason } = req.body;
+
+    try {
+        const order = await OrderModel.findById(orderId);
+
+        if (!order) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+
+        // Update the order status to 'cancel' and store the cancellation reason
+        order.status = 'cancelled';
+        order.cancellationReason = cancellationReason;
+
+        await order.save();
+
+        return res.status(200).json({ message: 'Order canceled successfully' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.put('/api/orders/:orderId/complete', upload.fields([
+    { name: 'deviceBill', maxCount: 1 },
+    { name: 'idCard', maxCount: 1 },
+    { name: 'deviceImage', maxCount: 1 }
+]), async (req, res) => {
+    const { orderId } = req.params;
+    const { imeiNumber, finalPrice } = req.body;
+
+    try {
+        const order = await OrderModel.findById(orderId);
+
+        if (!order) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+
+        // Update order details
+        order.imeiNumber = imeiNumber;
+        order.finalPrice = finalPrice;
+
+        // Attach images to order
+        if (req.files) {
+            order.deviceBill = req.files['deviceBill'][0].buffer;
+            order.idCard = req.files['idCard'][0].buffer;
+            order.deviceImage = req.files['deviceImage'][0].buffer;
+        }
+
+        // Update order status to 'complete'
+        order.status = 'complete';
+
+        // Save the order
+        await order.save();
+
+        // Remove files from memory (if needed)
+        if (req.files) {
+            Object.values(req.files).forEach(fileArray => {
+                fileArray.forEach(file => {
+                    if (file.path) {
+                        const filePath = path.join(__dirname, file.path);
+                        fs.unlinkSync(filePath);
+                    }
+                });
+            });
+        }
+
+        return res.status(200).json({ message: 'Order completed successfully' });
+    } catch (error) {
+        console.error(error); // Log the error to the console
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+
+
+app.get('/api/get-invoice-data/:orderId', async (req, res) => {
+    try {
+        const orderId = req.params.orderId;
+        const order = await OrderModel.findById(orderId).select('firstName lastName email phone address zipCode city productDetails imeiNumber finalPrice ');
+
+        if (!order) {
+            return res.status(404).send('Order not found');
+        }
+
+        // Extract necessary details
+        const { firstName, lastName, email, phone, address, zipCode, city, productDetails, imeiNumber, finalPrice } = order;
+
+        // Send JSON response
+        res.json({ firstName, lastName, email, phone, address, zipCode, city, productDetails, imeiNumber, finalPrice });
+    } catch (error) {
+        console.error(error);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+
 app.get('/get-all-orders', async (req, res) => {
     try {
         const { page = 1, pageSize = 5 } = req.query;
         const skip = (page - 1) * pageSize;
 
-        const allOrders = await OrderModel.find().skip(skip).limit(parseInt(pageSize));
+        const allOrders = await OrderModel.find()
+            .select('firstName phone productDetails.productName productDetails.price status')
+            .skip(skip)
+            .limit(parseInt(pageSize));
+
         const totalOrders = await OrderModel.countDocuments();
 
         res.json({
@@ -550,8 +683,27 @@ app.get('/get-all-orders', async (req, res) => {
     }
 });
 
-const storage = multer.memoryStorage();
-const upload = multer({ storage: storage });
+app.get('/user-orders/:email', async (req, res) => {
+    try {
+        const { email } = req.params;
+
+        // Fetch orders based on user's email with selected fields
+        const orders = await OrderModel.find({ email }).select({
+            _id: 1, // include the id
+            'productDetails.productName': 1,
+            'productDetails.price': 1,
+            status: 1,
+        });
+
+        res.json(orders);
+    } catch (error) {
+        console.error('Error fetching user orders:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+
+
 app.post('/upload', upload.single('file'), async (req, res) => {
     try {
         // Process the uploaded file (assuming it's in XLSX format)

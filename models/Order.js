@@ -31,6 +31,7 @@ const orderSchema = new mongoose.Schema({
     deviceBill: { type: Buffer, required: false }, // Change to Buffer type
     idCard: { type: Buffer, required: false }, // Change to Buffer type
     deviceImage: { type: Buffer, required: false }, // Change to Buffer type
+    cancellationReason: { type: String }
 });
 
 const OrderModel = mongoose.model('Order', orderSchema);

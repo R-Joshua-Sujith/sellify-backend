@@ -813,7 +813,7 @@ app.get('/get-all-orders', async (req, res) => {
         const skip = (page - 1) * pageSize;
 
         const allOrders = await OrderModel.find()
-            .select('firstName phone productDetails.productName productDetails.price status')
+            .select('orderID firstName phone productDetails.productName productDetails.price status')
             .skip(skip)
             .limit(parseInt(pageSize));
 
@@ -835,7 +835,7 @@ app.get('/user-orders/:email', async (req, res) => {
         // Fetch orders based on user's email with selected fields
         const orders = await OrderModel.find({ email }).select({
             _id: 1, // include the id
-            orderID: 1,
+            'orderID': 1,
             'productDetails.productName': 1,
             'productDetails.price': 1,
             status: 1,

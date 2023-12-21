@@ -13,6 +13,9 @@ const BrandModel = require("./models/Brands");
 const ProductModel = require("./models/Product")
 const UserModel = require("./models/User")
 const OrderModel = require("./models/Order")
+const PincodeModel = require("./models/PinCode")
+const ContactModel = require("./models/Contact");
+const CounterModel = require("./models/Counter")
 const fs = require('fs');
 const path = require('path');
 const pdf = require('html-pdf');
@@ -500,6 +503,145 @@ app.post('/login', async (req, res) => {
     res.json({ message: 'Login Successful' });
 });
 
+app.post('/api/users/:email', async (req, res) => {
+    const { email } = req.params;
+    const { firstName, lastName, phone, addPhone, address, zipCode, city } = req.body;
+
+    try {
+        // Find the user by email
+        const existingUser = await UserModel.findOne({ email });
+
+        if (existingUser) {
+            // Update the existing user's information
+            existingUser.firstName = firstName;
+            existingUser.lastName = lastName;
+            existingUser.phone = phone;
+            existingUser.addPhone = addPhone || '';
+            existingUser.address = address;
+            existingUser.zipCode = zipCode;
+            existingUser.city = city;
+
+            await existingUser.save();
+            res.status(200).json({ message: 'User information updated successfully.' });
+        } else {
+            // Create a new user if not exists
+            const newUser = new UserModel({
+                email,
+                firstName,
+                lastName,
+                phone,
+                addPhone: addPhone || '',
+                address,
+                zipCode,
+                city,
+            });
+
+            await newUser.save();
+            res.status(201).json({ message: 'User created successfully.' });
+        }
+    } catch (error) {
+        console.error('Error storing user information:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+app.post('/api/users-fill/:email', async (req, res) => {
+    const { email } = req.params;
+    const { firstName, lastName, phone, addPhone, address, zipCode, city } = req.body;
+
+    try {
+        // Find the user by email
+        const existingUser = await UserModel.findOne({ email });
+
+        if (existingUser) {
+            // Update the existing user's information
+            existingUser.firstName = firstName;
+            existingUser.lastName = lastName;
+            existingUser.phone = phone;
+            existingUser.addPhone = addPhone || '';
+
+
+            await existingUser.save();
+            res.status(200).json({ message: 'User information updated successfully.' });
+        } else {
+            // Create a new user if not exists
+            const newUser = new UserModel({
+                email,
+                firstName,
+                lastName,
+                phone,
+                addPhone: addPhone || '',
+
+            });
+
+            await newUser.save();
+            res.status(201).json({ message: 'User created successfully.' });
+        }
+    } catch (error) {
+        console.error('Error storing user information:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+app.get('/api/users/:email', async (req, res) => {
+    const { email } = req.params;
+
+    try {
+        // Find the user by email
+        const user = await UserModel.findOne({ email });
+
+        if (user) {
+            const userData = {
+                firstName: user.firstName,
+                lastName: user.lastName,
+                phone: user.phone,
+                addPhone: user.addPhone,
+                address: user.address,
+                zipCode: user.zipCode,
+                city: user.city,
+            };
+
+            res.status(200).json(userData);
+        } else {
+            res.status(404).json({ message: 'User not found.' });
+        }
+    } catch (error) {
+        console.error('Error fetching user information:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+async function getNextSequenceValue() {
+    try {
+        const sequenceDocument = await CounterModel.findOneAndUpdate(
+            { name: "Counter" },
+            { $inc: { sequence_value: 1 } },
+            { returnDocument: 'after' }
+        );
+
+        if (!sequenceDocument) {
+            throw new Error("Counter document not found");
+        }
+
+        return sequenceDocument.sequence_value;
+    } catch (error) {
+        console.error(error);
+        throw new Error("Failed to get the next sequence value");
+    }
+}
+
+// Utility function to generate custom order IDs
+async function generateCustomID() {
+    try {
+        const sequenceValue = await getNextSequenceValue();
+        console.log(sequenceValue)
+        return `Sellify${sequenceValue}`;
+    } catch (error) {
+        console.error(error);
+        throw new Error("Failed to generate custom ID");
+    }
+}
+
 
 app.post('/create-order', async (req, res) => {
     try {
@@ -518,8 +660,11 @@ app.post('/create-order', async (req, res) => {
             options
         } = req.body.updatedOrderDetails;
 
+        const orderID = await generateCustomID();
+
         // Create a new order instance using the OrderModel
         const newOrder = new OrderModel({
+            orderID: orderID,
             firstName,
             lastName,
             email,
@@ -644,17 +789,17 @@ app.put('/api/orders/:orderId/complete', upload.fields([
 app.get('/api/get-invoice-data/:orderId', async (req, res) => {
     try {
         const orderId = req.params.orderId;
-        const order = await OrderModel.findById(orderId).select('firstName lastName email phone address zipCode city productDetails imeiNumber finalPrice ');
+        const order = await OrderModel.findById(orderId).select('orderID firstName lastName email phone address zipCode city productDetails imeiNumber finalPrice ');
 
         if (!order) {
             return res.status(404).send('Order not found');
         }
 
         // Extract necessary details
-        const { firstName, lastName, email, phone, address, zipCode, city, productDetails, imeiNumber, finalPrice } = order;
+        const { orderID, firstName, lastName, email, phone, address, zipCode, city, productDetails, imeiNumber, finalPrice } = order;
 
         // Send JSON response
-        res.json({ firstName, lastName, email, phone, address, zipCode, city, productDetails, imeiNumber, finalPrice });
+        res.json({ orderID, firstName, lastName, email, phone, address, zipCode, city, productDetails, imeiNumber, finalPrice });
     } catch (error) {
         console.error(error);
         res.status(500).send('Internal Server Error');
@@ -690,6 +835,7 @@ app.get('/user-orders/:email', async (req, res) => {
         // Fetch orders based on user's email with selected fields
         const orders = await OrderModel.find({ email }).select({
             _id: 1, // include the id
+            orderID: 1,
             'productDetails.productName': 1,
             'productDetails.price': 1,
             status: 1,
@@ -962,7 +1108,134 @@ app.get('/api/products/bulk-download/:categoryType', async (req, res) => {
     }
 });
 
+app.post('/create/pincode', async (req, res) => {
+    try {
+        const pincodeData = req.body;
+        const newPincode = new PincodeModel(pincodeData);
+        const savedPincode = await newPincode.save();
+        res.status(201).json(savedPincode);
+    } catch (error) {
+        console.error('Error saving pin code:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
 
+
+
+app.get('/get-all-pincodes', async (req, res) => {
+    try {
+        const { page = 1, pageSize = 5 } = req.query;
+        const skip = (page - 1) * pageSize;
+
+        const allPincodes = await PincodeModel.find().skip(skip).limit(parseInt(pageSize));
+        const totalPincodes = await PincodeModel.countDocuments();
+
+        res.json({
+            totalRows: totalPincodes,
+            data: allPincodes,
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/get-pincode/:id', async (req, res) => {
+    try {
+        const pincodeId = req.params.id;
+
+        const pincode = await PincodeModel.findById(pincodeId);
+
+        if (!pincode) {
+            return res.status(404).json({ error: 'Pincode not found' });
+        }
+
+        res.json(pincode);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.put('/update-pincode/:id', async (req, res) => {
+    try {
+        const pincodeId = req.params.id;
+        const updatedData = req.body;
+
+        // Validate if the request body contains valid data
+        if (!updatedData || Object.keys(updatedData).length === 0) {
+            return res.status(400).json({ error: 'Invalid update data' });
+        }
+
+        // Find the pin code by ID and update it
+        const updatedPincode = await PincodeModel.findByIdAndUpdate(
+            pincodeId,
+            updatedData,
+            { new: true }
+        );
+
+        // Check if the pin code was found and updated
+        if (!updatedPincode) {
+            return res.status(404).json({ error: 'Pincode not found' });
+        }
+
+        res.json(updatedPincode);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/check-pincode/:pincode', async (req, res) => {
+    try {
+        const requestedPincode = req.params.pincode;
+
+        // Use Mongoose to find if the pin code exists in any document
+        const pincodeExists = await PincodeModel.exists({ 'pinCodes': { $in: [requestedPincode] } });
+
+        res.json({ pincodeExists });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.delete('/delete-pincode/:id', async (req, res) => {
+    try {
+        const pincodeId = req.params.id;
+
+        // Use Mongoose to find and delete the pin code by ID
+        const deletedPincode = await PincodeModel.findByIdAndDelete(pincodeId);
+
+        if (!deletedPincode) {
+            return res.status(404).json({ message: 'Pin code not found' });
+        }
+
+        res.json({ message: 'Pin code deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+
+app.post('/contact', async (req, res) => {
+    try {
+        const { name, email, phone, message } = req.body;
+
+        // Create a new contact instance
+        const newContact = new ContactModel({
+            name,
+            email,
+            phone,
+            message,
+        });
+
+        // Save the contact to the database
+        const savedContact = await newContact.save();
+
+        res.status(201).json(savedContact);
+    } catch (error) {
+        console.error(error);
+        res.status(500).send('Server Error');
+    }
+});
 
 
 app.listen(5000, () => {

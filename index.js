@@ -332,6 +332,25 @@ app.get('/get-products/:categoryType/:brandName', async (req, res) => {
     }
 });
 
+app.get('/get-products/:categoryType', async (req, res) => {
+    try {
+        const { categoryType } = req.params;
+
+        if (!categoryType) {
+            return res.status(400).json({ error: 'Category Type is required' });
+        }
+
+        // Find the top 5 products with the highest basePrice
+        const products = await ProductModel.find({ categoryType })
+            .sort({ basePrice: -1 }) // Sort in descending order of basePrice
+            .limit(5); // Limit the results to 5
+
+        res.json(products);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server error' });
+    }
+});
+
 
 // app.get('/get-all-products', async (req, res) => {
 //     try {

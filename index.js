@@ -363,11 +363,23 @@ app.get('/get-products/:categoryType', async (req, res) => {
 
 app.get('/get-all-products', async (req, res) => {
     try {
-        const { page = 1, pageSize = 5 } = req.query;
+        const { page = 1, pageSize = 5, search = '' } = req.query;
         const skip = (page - 1) * pageSize;
 
-        const allProducts = await ProductModel.find().skip(skip).limit(parseInt(pageSize));
-        const totalProducts = await ProductModel.countDocuments();
+        // Use a regular expression to make the search case-insensitive and partial
+        const searchRegex = new RegExp(search, 'i');
+
+        const query = {
+            $or: [
+                { brandName: searchRegex },
+                { seriesName: searchRegex },
+                { model: searchRegex },
+                { variant: searchRegex },
+            ],
+        };
+
+        const allProducts = await ProductModel.find(query).skip(skip).limit(parseInt(pageSize));
+        const totalProducts = await ProductModel.countDocuments(query);
 
         res.json({
             totalRows: totalProducts,
@@ -377,6 +389,7 @@ app.get('/get-all-products', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
 
 app.get('/products/:productId', async (req, res) => {
     try {
@@ -752,6 +765,22 @@ app.put('/:orderId/cancel', async (req, res) => {
     }
 });
 
+app.get('/single-orders/:id', async (req, res) => {
+    const orderId = req.params.id;
+
+    try {
+        const order = await OrderModel.findById(orderId, { deviceBill: 0, idCard: 0, deviceImage: 0 }).exec();
+
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        res.json(order);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
 app.put('/api/orders/:orderId/complete', upload.fields([
     { name: 'deviceBill', maxCount: 1 },
     { name: 'idCard', maxCount: 1 },
@@ -828,15 +857,33 @@ app.get('/api/get-invoice-data/:orderId', async (req, res) => {
 
 app.get('/get-all-orders', async (req, res) => {
     try {
-        const { page = 1, pageSize = 5 } = req.query;
+        const { page = 1, pageSize = 5, search = '', startDate, endDate } = req.query;
         const skip = (page - 1) * pageSize;
 
-        const allOrders = await OrderModel.find()
+        const query = {};
+
+        if (search) {
+            query.$or = [
+                { orderID: { $regex: search, $options: 'i' } },
+                { phone: { $regex: search, $options: 'i' } },
+                { firstName: { $regex: search, $options: 'i' } },
+            ];
+        }
+
+        if (startDate && endDate) {
+            query.createdAt = {
+                $gte: new Date(startDate),
+                $lte: new Date(endDate),
+            };
+        }
+
+        const allOrders = await OrderModel.find(query)
             .select('orderID firstName phone productDetails.productName productDetails.price status')
+            .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(pageSize));
 
-        const totalOrders = await OrderModel.countDocuments();
+        const totalOrders = await OrderModel.countDocuments(query);
 
         res.json({
             totalRows: totalOrders,
@@ -846,6 +893,46 @@ app.get('/get-all-orders', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+
+// app.get('/get-all-orders', async (req, res) => {
+//     try {
+//         const { page = 1, pageSize = 5, search = '' } = req.query;
+//         const skip = (page - 1) * pageSize;
+
+//         const query = {};
+
+//         if (search) {
+//             query.$or = [
+//                 { orderID: { $regex: search, $options: 'i' } }, // Case-insensitive search for orderID
+//                 { phone: { $regex: search, $options: 'i' } },
+//                 { firstName: { $regex: search, $options: 'i' } },  // Case-insensitive search for firstName
+//                 // Add more fields as needed for searching
+//             ];
+//         }
+
+
+
+//         const allOrders = await OrderModel.find(query)
+//             .select('orderID firstName phone productDetails.productName productDetails.price status')
+//             .sort({ createdAt: -1 })
+//             .skip(skip)
+//             .limit(parseInt(pageSize));
+
+//         const totalOrders = await OrderModel.countDocuments(query);
+
+//         res.json({
+//             totalRows: totalOrders,
+//             data: allOrders,
+//         });
+//     } catch (error) {
+//         res.status(500).json({ error: error.message });
+//     }
+// });
+
+
+
+
 
 app.get('/user-orders/:email', async (req, res) => {
     try {

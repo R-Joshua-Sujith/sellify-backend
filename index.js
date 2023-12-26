@@ -16,10 +16,13 @@ const OrderModel = require("./models/Order")
 const PincodeModel = require("./models/PinCode")
 const ContactModel = require("./models/Contact");
 const CounterModel = require("./models/Counter")
+const Admin = require('./models/Admin');
 const fs = require('fs');
 const path = require('path');
 const pdf = require('html-pdf');
 const bodyParser = require('body-parser');
+const bcrypt = require('bcrypt');
+
 
 dotenv.config();
 const app = express();
@@ -36,6 +39,54 @@ mongoose.connect(process.env.MONGO_URL)
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+
+app.post('/register', async (req, res) => {
+    const { email, password } = req.body;
+
+    try {
+        const existingAdmin = await Admin.findOne({ email });
+
+        if (existingAdmin) {
+            return res.status(400).json({ message: 'Admin with this email already exists' });
+        }
+
+        // Hash the password before saving it
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const newAdmin = new Admin({ email, password: hashedPassword });
+        await newAdmin.save();
+
+        res.status(201).json({ message: 'Registration successful' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+app.post('/admin-login', async (req, res) => {
+    const { email, password } = req.body;
+
+    try {
+        const admin = await Admin.findOne({ email });
+
+        if (!admin) {
+            return res.status(401).json({ message: 'Invalid email or password' });
+        }
+
+        const passwordMatch = await bcrypt.compare(password, admin.password);
+
+        if (!passwordMatch) {
+            return res.status(401).json({ message: 'Invalid email or password' });
+        }
+
+        // You can generate and send a token for authentication here
+
+        res.status(200).json({ message: 'Login successful' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
 
 app.get("/get-all-categories", async (req, res) => {
     try {
@@ -878,7 +929,7 @@ app.get('/get-all-orders', async (req, res) => {
         }
 
         const allOrders = await OrderModel.find(query)
-            .select('orderID firstName phone productDetails.productName productDetails.price status')
+            .select('orderID firstName phone productDetails.productName productDetails.price status zipCode city scheduledPickup.pickupDate scheduledPickup.pickupTime')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(pageSize));

@@ -22,6 +22,7 @@ const path = require('path');
 const pdf = require('html-pdf');
 const bodyParser = require('body-parser');
 const bcrypt = require('bcrypt');
+const zip = require('express-zip');
 
 
 dotenv.config();
@@ -1002,6 +1003,34 @@ app.get('/user-orders/:email', async (req, res) => {
     } catch (error) {
         console.error('Error fetching user orders:', error);
         res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/api/orders/:orderId/documents', async (req, res) => {
+    try {
+        const orderId = req.params.orderId;
+
+        // Fetch the order from the database
+        const order = await OrderModel.findById(orderId);
+
+        if (!order) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+
+        // Extract deviceBill, idCard, and deviceImage from the order
+        const { deviceBill, idCard, deviceImage } = order;
+
+        // Convert Buffer data to base64 for client-side rendering
+        const documentDetails = {
+            deviceBill: deviceBill ? deviceBill.toString('base64') : null,
+            idCard: idCard ? idCard.toString('base64') : null,
+            deviceImage: deviceImage ? deviceImage.toString('base64') : null,
+        };
+
+        res.json(documentDetails);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 

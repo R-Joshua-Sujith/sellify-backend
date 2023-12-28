@@ -30,6 +30,7 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 app.use(cors());
+app.use('/uploads', express.static('uploads'));
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
@@ -470,8 +471,9 @@ app.get('/models/:category/:brand/:series', async (req, res) => {
 app.post('/create-products', upload2.single('productImage'), async (req, res) => {
     try {
         const { basePrice, variant, brandName, seriesName, categoryType, model, dynamicFields } = req.body;
+        const dynamicFieldsArray = JSON.parse(dynamicFields);
         const productImage = req.file.originalname;
-        const newProduct = new ProductModel({ productImage, basePrice, variant, brandName, seriesName, categoryType, model, dynamicFields });
+        const newProduct = new ProductModel({ productImage, basePrice, variant, brandName, seriesName, categoryType, model, dynamicFields: dynamicFieldsArray });
         const savedProduct = await newProduct.save();
         res.json(savedProduct);
     } catch (error) {
@@ -582,9 +584,11 @@ app.get('/products/:productId', async (req, res) => {
     }
 });
 
-app.put('/update-product/:productId', async (req, res) => {
+app.put('/update-product/:productId', upload2.single('productImage'), async (req, res) => {
     const { productId } = req.params;
     const updateData = req.body;
+    const dynamicFieldsArray = JSON.parse(req.body.dynamicFields);
+    const productImage = req.file.originalname;
 
     try {
         // Find the product by _id
@@ -594,8 +598,16 @@ app.put('/update-product/:productId', async (req, res) => {
             return res.status(404).json({ error: 'Product not found' });
         }
 
-        // Update the product data
-        Object.assign(existingProduct, updateData);
+        existingProduct.basePrice = updateData.basePrice;
+        existingProduct.variant = updateData.variant;
+        existingProduct.brandName = updateData.brandName;
+        existingProduct.seriesName = updateData.seriesName;
+        existingProduct.categoryType = updateData.categoryType;
+        existingProduct.model = updateData.model;
+        existingProduct.dynamicFields = dynamicFieldsArray;
+        existingProduct.productImage = productImage;
+
+
 
         // Save the updated product
         const updatedProduct = await existingProduct.save();

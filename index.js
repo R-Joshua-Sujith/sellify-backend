@@ -33,6 +33,17 @@ app.use(cors());
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
+const storage2 = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/'); // Set the destination folder
+    },
+    filename: function (req, file, cb) {
+        cb(null, file.originalname); // Use the original filename
+    }
+});
+
+const upload2 = multer({ storage: storage2 });
+
 mongoose.connect(process.env.MONGO_URL)
     .then(() => console.log("DB Connection Successful"))
     .catch((err) => console.log(err))
@@ -323,6 +334,74 @@ app.get('/brands-category/:categoryType', async (req, res) => {
     }
 });
 
+// app.get('/brands-category/:categoryType', async (req, res) => {
+//     try {
+//         const categoryType = req.params.categoryType;
+
+//         // Use the aggregation framework to perform the counting operation within the database query
+//         const brands = await BrandModel.aggregate([
+//             {
+//                 $match: {
+//                     [`series.${categoryType}`]: { $exists: true, $not: { $size: 0 } }
+//                 }
+//             },
+//             {
+//                 $lookup: {
+//                     from: "products", // Assuming the name of your products collection
+//                     localField: "brandName",
+//                     foreignField: "brandName",
+//                     as: "products"
+//                 }
+//             },
+//             {
+//                 $addFields: {
+//                     productCount: { $size: "$products" }
+//                 }
+//             },
+//             {
+//                 $project: {
+//                     _id: 1,
+//                     brandName: 1,
+//                     brandImage: 1,
+//                     productCount: 1
+//                 }
+//             }
+//         ]);
+
+//         if (brands.length === 0) {
+//             return res.status(404).json({ error: 'No brands found for the specified category type' });
+//         }
+
+//         res.json(brands);
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).json({ error: 'Internal Server Error' });
+//     }
+// });
+
+
+app.get('/brands-category-menu/:categoryType', async (req, res) => {
+    try {
+        const categoryType = req.params.categoryType;
+
+        // Find all brands that have the specified categoryType in their series object
+        const brands = await BrandModel.find({ [`series.${categoryType}`]: { $exists: true, $not: { $size: 0 } } });
+
+        if (brands.length === 0) {
+            return res.status(404).json({ error: 'No brands found for the specified category type' });
+        }
+
+        // Extract only the _id and brandName fields from each brand
+        // const brandNames = brands.map(brand => ({ _id: brand._id, brandName: brand.brandName, brandImage: brand.brandImage }));
+        const brandNames = brands.map(brand => brand.brandName);
+
+        res.json(brandNames);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 
 
 app.get('/series/:brandName/:categoryType', async (req, res) => {
@@ -388,9 +467,10 @@ app.get('/models/:category/:brand/:series', async (req, res) => {
 
 
 
-app.post('/create-products', async (req, res) => {
+app.post('/create-products', upload2.single('productImage'), async (req, res) => {
     try {
-        const { productImage, basePrice, variant, brandName, seriesName, categoryType, model, dynamicFields } = req.body;
+        const { basePrice, variant, brandName, seriesName, categoryType, model, dynamicFields } = req.body;
+        const productImage = req.file.originalname;
         const newProduct = new ProductModel({ productImage, basePrice, variant, brandName, seriesName, categoryType, model, dynamicFields });
         const savedProduct = await newProduct.save();
         res.json(savedProduct);
@@ -399,6 +479,7 @@ app.post('/create-products', async (req, res) => {
             res.status(400).json({ error: 'Product already exists' })
         } else {
             res.status(500).json({ error: "Internal Server error" })
+            console.log(error)
         }
     }
 });
@@ -778,7 +859,9 @@ app.post('/create-order', async (req, res) => {
             city,
             scheduledPickup,
             productDetails,
-            options
+            options,
+            modeofpayment,
+            upiID
         } = req.body.updatedOrderDetails;
 
         const orderID = await generateCustomID();
@@ -796,7 +879,9 @@ app.post('/create-order', async (req, res) => {
             city,
             scheduledPickup,
             productDetails,
-            options
+            options,
+            modeofpayment,
+            upiID
         });
 
         // Save the new order to the database
@@ -1036,7 +1121,7 @@ app.get('/user-orders/:email', async (req, res) => {
             'productDetails.productName': 1,
             'productDetails.price': 1,
             status: 1,
-        });
+        }).sort({ createdAt: -1 })
 
         res.json(orders);
     } catch (error) {

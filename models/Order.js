@@ -26,6 +26,13 @@ const orderSchema = new mongoose.Schema({
         required: true,
         default: 'new'
     },
+    modeofpayment: {
+        type: String, required: false
+    },
+    upiID: {
+        type: String, required: false
+    },
+
     imeiNumber: { type: String, required: false },
     finalPrice: { type: String, required: false },
     deviceBill: { type: Buffer, required: false }, // Change to Buffer type

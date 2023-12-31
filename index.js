@@ -584,11 +584,45 @@ app.get('/products/:productId', async (req, res) => {
     }
 });
 
-app.put('/update-product/:productId', upload2.single('productImage'), async (req, res) => {
+// app.put('/update-product/:productId', upload2.single('productImage'), async (req, res) => {
+//     const { productId } = req.params;
+//     const updateData = req.body;
+//     const dynamicFieldsArray = JSON.parse(req.body.dynamicFields);
+//     const productImage = req.file.originalname;
+
+//     try {
+//         // Find the product by _id
+//         const existingProduct = await ProductModel.findById(productId);
+
+//         if (!existingProduct) {
+//             return res.status(404).json({ error: 'Product not found' });
+//         }
+
+//         existingProduct.basePrice = updateData.basePrice;
+//         existingProduct.variant = updateData.variant;
+//         existingProduct.brandName = updateData.brandName;
+//         existingProduct.seriesName = updateData.seriesName;
+//         existingProduct.categoryType = updateData.categoryType;
+//         existingProduct.model = updateData.model;
+//         existingProduct.dynamicFields = dynamicFieldsArray;
+//         existingProduct.productImage = productImage;
+
+
+
+//         // Save the updated product
+//         const updatedProduct = await existingProduct.save();
+
+//         res.json(updatedProduct);
+//     } catch (error) {
+//         res.status(500).json({ error: error.message });
+//     }
+// });
+
+
+app.put('/update-product/:productId', async (req, res) => {
     const { productId } = req.params;
     const updateData = req.body;
     const dynamicFieldsArray = JSON.parse(req.body.dynamicFields);
-    const productImage = req.file.originalname;
 
     try {
         // Find the product by _id
@@ -605,9 +639,6 @@ app.put('/update-product/:productId', upload2.single('productImage'), async (req
         existingProduct.categoryType = updateData.categoryType;
         existingProduct.model = updateData.model;
         existingProduct.dynamicFields = dynamicFieldsArray;
-        existingProduct.productImage = productImage;
-
-
 
         // Save the updated product
         const updatedProduct = await existingProduct.save();

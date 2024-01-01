@@ -649,6 +649,31 @@ app.put('/update-product/:productId', async (req, res) => {
     }
 });
 
+app.put('/update-product-image/:productId', upload2.single('productImage'), async (req, res) => {
+    const { productId } = req.params;
+
+    try {
+        // Find the product by _id
+        const existingProduct = await ProductModel.findById(productId);
+
+        if (!existingProduct) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        // Update the product image only if a new image is provided
+        if (req.file) {
+            existingProduct.productImage = req.file.originalname;
+        }
+
+        // Save the updated product
+        const updatedProduct = await existingProduct.save();
+
+        res.json(updatedProduct);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 
 app.delete('/delete-product/:productId', async (req, res) => {
     const { productId } = req.params;

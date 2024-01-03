@@ -470,10 +470,10 @@ app.get('/models/:category/:brand/:series', async (req, res) => {
 
 app.post('/create-products', upload2.single('productImage'), async (req, res) => {
     try {
-        const { basePrice, variant, brandName, seriesName, categoryType, model, dynamicFields } = req.body;
+        const { basePrice, variant, brandName, seriesName, categoryType, model, dynamicFields, bestSelling } = req.body;
         const dynamicFieldsArray = JSON.parse(dynamicFields);
         const productImage = req.file.originalname;
-        const newProduct = new ProductModel({ productImage, basePrice, variant, brandName, seriesName, categoryType, model, dynamicFields: dynamicFieldsArray });
+        const newProduct = new ProductModel({ productImage, basePrice, variant, brandName, seriesName, categoryType, model, dynamicFields: dynamicFieldsArray, bestSelling });
         const savedProduct = await newProduct.save();
         res.json(savedProduct);
     } catch (error) {
@@ -513,9 +513,9 @@ app.get('/get-products/:categoryType', async (req, res) => {
         }
 
         // Find the top 5 products with the highest basePrice
-        const products = await ProductModel.find({ categoryType })
-            .sort({ basePrice: -1 }) // Sort in descending order of basePrice
-            .limit(5); // Limit the results to 5
+        const products = await ProductModel.find({ categoryType, bestSelling: "true" })
+            .sort({ basePrice: -1 }); // Sort in descending order of basePrice
+        // .limit(5); // Limit the results to 5
 
         res.json(products);
     } catch (error) {
@@ -547,6 +547,7 @@ app.get('/get-all-products', async (req, res) => {
                 { seriesName: searchRegex },
                 { model: searchRegex },
                 { variant: searchRegex },
+                { bestSelling: searchRegex }
             ],
         };
 
@@ -638,6 +639,7 @@ app.put('/update-product/:productId', async (req, res) => {
         existingProduct.seriesName = updateData.seriesName;
         existingProduct.categoryType = updateData.categoryType;
         existingProduct.model = updateData.model;
+        existingProduct.bestSelling = updateData.bestSelling;
         existingProduct.dynamicFields = dynamicFieldsArray;
 
         // Save the updated product
@@ -1317,7 +1319,7 @@ app.get('/generate-excel/:categoryType', async (req, res) => {
         if (!category) {
             return res.status(404).json({ error: 'Category not found for the given categoryType.' });
         }
-        const headers = ['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'variant', 'basePrice', 'productImage']
+        const headers = ['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'variant', 'basePrice', 'productImage', 'bestSelling'];
 
         // Extract attributes
         if (category.attributes) {
@@ -1373,13 +1375,13 @@ app.post('/api/products/bulk-upload', upload.single('file'), async (req, res) =>
         }
         const allHeaders = excelData[0];
 
-        const dynamic = allHeaders.filter((item) => !['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'variant', 'basePrice', 'productImage'].includes(item));
+        const dynamic = allHeaders.filter((item) => !['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'variant', 'basePrice', 'productImage', 'bestSelling'].includes(item));
 
         for (const row of excelData.slice(1)) {
             const uniqueIdentifier = row[0];
             const existingItem = await ProductModel.findOne({ _id: uniqueIdentifier })
             const dynamicOptions = [];
-            let i = 8;
+            let i = 9;
             for (let x of dynamic) {
                 dynamicOptions.push({
                     optionHeading: x,
@@ -1396,6 +1398,7 @@ app.post('/api/products/bulk-upload', upload.single('file'), async (req, res) =>
                 existingItem.variant = row[5];
                 existingItem.basePrice = row[6];
                 existingItem.productImage = row[7];
+                existingItem.bestSelling = row[8];
                 existingItem.dynamicFields = dynamicOptions;
 
                 await existingItem.save();
@@ -1408,6 +1411,7 @@ app.post('/api/products/bulk-upload', upload.single('file'), async (req, res) =>
                     variant: row[5],
                     basePrice: row[6],
                     productImage: row[7],
+                    bestSelling: row[8],
                     dynamicFields: dynamicOptions,
                 })
                 await newProduct.save();
@@ -1439,7 +1443,7 @@ app.get('/api/products/bulk-download/:categoryType', async (req, res) => {
         const excelData = [];
 
         // Add headers to the Excel data
-        const headers = ['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'variant', 'basePrice', 'productImage'];
+        const headers = ['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'variant', 'basePrice', 'productImage', 'bestSelling'];
 
         // Assuming dynamicFields is an array in each product document
         if (products[0].dynamicFields) {
@@ -1452,7 +1456,7 @@ app.get('/api/products/bulk-download/:categoryType', async (req, res) => {
 
         // Add product data to the Excel data
         products.forEach(product => {
-            const rowData = [product._id.toString(), product.categoryType, product.brandName, product.seriesName, product.model, product.variant, product.basePrice, product.productImage];
+            const rowData = [product._id.toString(), product.categoryType, product.brandName, product.seriesName, product.model, product.variant, product.basePrice, product.productImage, product.bestSelling];
 
             // Add dynamic field values to the row
             if (product.dynamicFields) {

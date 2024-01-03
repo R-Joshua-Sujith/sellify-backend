@@ -13,6 +13,7 @@ const ProductSchema = new mongoose.Schema({
     brandName: { type: String },
     seriesName: { type: String },
     categoryType: { type: String },
+    bestSelling: { type: String },
     dynamicFields: [optionSchema]// Dynamic fields based on the category
 });
 

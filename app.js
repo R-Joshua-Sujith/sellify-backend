@@ -21,7 +21,7 @@ const fs = require('fs');
 const path = require('path');
 const pdf = require('html-pdf');
 const bodyParser = require('body-parser');
-// const bcrypt = require('bcrypt');
+const bcrypt = require('bcrypt');
 
 const zip = require('express-zip');
 
@@ -51,56 +51,81 @@ mongoose.connect(process.env.MONGO_URL)
 
 
 
+
+
+
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// app.post('/register', async (req, res) => {
-//     const { email, password } = req.body;
 
-//     try {
-//         const existingAdmin = await Admin.findOne({ email });
+app.get("/api/documentCounts", async (req, res) => {
+    try {
+        const categoryCount = await CategoryModel.countDocuments();
+        const brandCount = await BrandModel.countDocuments();
+        const productCount = await ProductModel.countDocuments();
+        const orderCount = await OrderModel.countDocuments();
+        const userCount = await UserModel.countDocuments();
 
-//         if (existingAdmin) {
-//             return res.status(400).json({ message: 'Admin with this email already exists' });
-//         }
+        const counts = {
+            category: categoryCount,
+            brand: brandCount,
+            product: productCount,
+            order: orderCount,
+            user: userCount
+        };
+        res.json(counts);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' })
+    }
+})
 
-//         // Hash the password before saving it
-//         const hashedPassword = await bcrypt.hash(password, 10);
+app.post('/register', async (req, res) => {
+    const { email, password } = req.body;
 
-//         const newAdmin = new Admin({ email, password: hashedPassword });
-//         await newAdmin.save();
+    try {
+        const existingAdmin = await Admin.findOne({ email });
 
-//         res.status(201).json({ message: 'Registration successful' });
-//     } catch (error) {
-//         console.error(error);
-//         res.status(500).json({ message: 'Internal Server Error' });
-//     }
-// });
+        if (existingAdmin) {
+            return res.status(400).json({ message: 'Admin with this email already exists' });
+        }
 
-// app.post('/admin-login', async (req, res) => {
-//     const { email, password } = req.body;
+        // Hash the password before saving it
+        const hashedPassword = await bcrypt.hash(password, 10);
 
-//     try {
-//         const admin = await Admin.findOne({ email });
+        const newAdmin = new Admin({ email, password: hashedPassword });
+        await newAdmin.save();
 
-//         if (!admin) {
-//             return res.status(401).json({ message: 'Invalid email or password' });
-//         }
+        res.status(201).json({ message: 'Registration successful' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
 
-//         const passwordMatch = await bcrypt.compare(password, admin.password);
+app.post('/admin-login', async (req, res) => {
+    const { email, password } = req.body;
 
-//         if (!passwordMatch) {
-//             return res.status(401).json({ message: 'Invalid email or password' });
-//         }
+    try {
+        const admin = await Admin.findOne({ email });
 
-//         // You can generate and send a token for authentication here
+        if (!admin) {
+            return res.status(401).json({ message: 'Invalid email or password' });
+        }
 
-//         res.status(200).json({ message: 'Login successful' });
-//     } catch (error) {
-//         console.error(error);
-//         res.status(500).json({ message: 'Internal Server Error' });
-//     }
-// });
+        const passwordMatch = await bcrypt.compare(password, admin.password);
+
+        if (!passwordMatch) {
+            return res.status(401).json({ message: 'Invalid email or password' });
+        }
+
+        // You can generate and send a token for authentication here
+
+        res.status(200).json({ message: 'Login successful' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
 
 app.get("/get-all-categories", async (req, res) => {
     try {
@@ -1655,6 +1680,9 @@ app.get('/get-all-users', async (req, res) => {
     }
 })
 
+app.get("/", async (req, res) => {
+    res.send("Selligo backend")
+})
 
 app.listen(5000, () => {
     console.log("Backend Server is Running")

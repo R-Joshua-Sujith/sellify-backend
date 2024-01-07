@@ -105,4 +105,13 @@ router.delete('/delete-pincode/:id', async (req, res) => {
     }
 });
 
+router.get('/api/cityNames', async (req, res) => {
+    try {
+        const uniqueCityNames = await PincodeModel.distinct('cityName');
+        res.json(uniqueCityNames);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 module.exports = router;

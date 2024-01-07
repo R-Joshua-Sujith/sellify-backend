@@ -238,4 +238,61 @@ router.get('/get-all-users', async (req, res) => {
     }
 })
 
+router.get('/get-all-userss', async (req, res) => {
+    try {
+        const { page = 1, pageSize = 10, search = '' } = req.query;
+        const skip = (page - 1) * pageSize;
+
+        const query = {};
+
+        if (search) {
+            query.$or = [
+                { email: { $regex: search, $options: 'i' } },
+                { firstName: { $regex: search, $options: 'i' } },
+                { lastName: { $regex: search, $options: 'i' } },
+                { phone: { $regex: search, $options: 'i' } },
+                { zipCode: { $regex: search, $options: 'i' } },
+                { city: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const allUsers = await UserModel.find(query)
+            .select('email firstName lastName phone addPhone address zipCode city')
+            .sort({ createdAt: -1 }) // Assuming you have a createdAt field in your UserSchema
+            .skip(skip)
+            .limit(parseInt(pageSize));
+
+        const totalUsers = await UserModel.countDocuments(query);
+        const headers = ["email", "firstName", "lastName", "phone", "addPhone", "address", "zipCode", "city"];
+
+        res.send({
+            headers,
+            totalRows: totalUsers,
+            data: allUsers,
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+})
+
+router.delete('/delete/users/:userId', async (req, res) => {
+    try {
+        const userId = req.params.userId;
+
+        // Check if the user exists
+        const user = await UserModel.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Delete the user
+        await UserModel.findByIdAndDelete(userId);
+
+        return res.status(200).json({ message: 'User deleted successfully' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 module.exports = router;

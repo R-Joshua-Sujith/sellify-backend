@@ -31,7 +31,7 @@ async function generateCustomID() {
     try {
         const sequenceValue = await getNextSequenceValue();
         console.log(sequenceValue)
-        return `Sellify${sequenceValue}`;
+        return `Selligo${sequenceValue}`;
     } catch (error) {
         console.error(error);
         throw new Error("Failed to generate custom ID");

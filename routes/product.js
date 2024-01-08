@@ -1,6 +1,7 @@
 const router = require("express").Router();
 const express = require("express");
 const ProductModel = require("../models/Product");
+const CategoryModel = require("../models/Category");
 const multer = require('multer');
 const XLSX = require('xlsx');
 
@@ -48,9 +49,56 @@ router.get('/get-products/:categoryType/:brandName', async (req, res) => {
         }
 
         const products = await ProductModel.find({ categoryType, brandName });
-        res.json(products);
+        const category = await CategoryModel.find({ category_type: categoryType })
+        const data = [];
+        console.log(category)
+        if (category[0].attributes) {
+            category[0].attributes.forEach(attribute => {
+                attribute.options.forEach(option => {
+                    data.push({
+                        optionHeading: option.optionHeading,
+                        optionType: option.optionType,
+                    })
+                })
+            })
+        }
+        if (category[0].sections) {
+            category[0].sections.forEach(section => {
+
+                section.options.forEach(option => {
+                    data.push({
+                        optionHeading: option.optionHeading,
+                        optionType: option.optionType,
+                    });
+                });
+            });
+        }
+        // categoryDocument.attributes.forEach((attribute) => {
+        //     // Iterate through options in the attribute
+        //     attribute.options.forEach((option) => {
+        //         data.push({
+        //             option: option.optionHeading,
+        //             optionType: option.optionType,
+        //         });
+        //     });
+        // });
+
+        // // Iterate through sections
+        // categoryDocument.sections.forEach((section) => {
+        //     // Iterate through options in the section
+        //     section.options.forEach((option) => {
+        //         data.push({
+        //             attribute: option.optionHeading,
+        //             optionType: option.optionType,
+        //         });
+        //     });
+        // });
+
+
+        res.json({ products, data });
     } catch (error) {
         res.status(500).json({ error: 'Internal Server error' });
+        console.log(error)
     }
 });
 

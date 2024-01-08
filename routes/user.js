@@ -190,6 +190,7 @@ router.get('/api/users/:email', async (req, res) => {
                 address: user.address,
                 zipCode: user.zipCode,
                 city: user.city,
+                email: user.email
             };
 
             res.status(200).json(userData);

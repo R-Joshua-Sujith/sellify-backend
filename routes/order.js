@@ -1,6 +1,7 @@
 const router = require("express").Router();
 const OrderModel = require("../models/Order");
 const CounterModel = require("../models/Counter")
+const AbundantOrderModel = require("../models/AbundantOrder");
 const multer = require('multer');
 
 const storage = multer.memoryStorage();
@@ -79,6 +80,10 @@ router.post('/create-order', async (req, res) => {
 
         // Save the new order to the database
         const savedOrder = await newOrder.save();
+        const deletedAbundantOrder = await AbundantOrderModel.deleteMany({
+            email,
+            'productDetails.productName': productDetails.productName,
+        });
 
         res.status(201).json({ message: 'Order created successfully', order: savedOrder });
     } catch (error) {

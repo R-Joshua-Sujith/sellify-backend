@@ -13,6 +13,7 @@ const orderRoute = require("./routes/order");
 const pincodeRoute = require("./routes/pincode");
 const contactRoute = require("./routes/contact");
 const statisticRoute = require("./routes/statistics");
+const abundantOrderRoute = require("./routes/abundantOrder")
 
 
 dotenv.config();
@@ -40,7 +41,7 @@ app.use("/order", orderRoute);
 app.use("/pincode", pincodeRoute);
 app.use("/contact", contactRoute);
 app.use("/statistic", statisticRoute);
-
+app.use("/abundant", abundantOrderRoute);
 
 app.get("/", async (req, res) => {
     res.send("Selligo backend")

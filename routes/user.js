@@ -296,4 +296,47 @@ router.delete('/delete/users/:userId', async (req, res) => {
     }
 });
 
+router.put('/api/users/:email/city', async (req, res) => {
+    try {
+        const email = req.params.email;
+        const newCity = req.body.city;
+
+        // Find the user by ID
+        const user = await UserModel.findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Update the city field
+        user.city = newCity;
+
+        // Save the updated user
+        await user.save();
+
+        res.json({ message: 'City updated successfully', user });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+router.get('/api/users/:email/city', async (req, res) => {
+    try {
+        const email = req.params.email;
+
+        // Find the user by ID and select only the city field
+        const user = await UserModel.findOne({ email }).select('city');
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json({ city: user.city });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 module.exports = router;

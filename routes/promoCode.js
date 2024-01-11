@@ -8,8 +8,11 @@ router.post('/create/promocode', async (req, res) => {
         const savedPromoCode = await newPromoCode.save();
         res.status(201).json(savedPromoCode);
     } catch (error) {
-        console.error('Error saving pin code:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
+        if (error.code === 11000 && error.keyPattern && error.keyPattern.code) {
+            res.status(400).json({ error: "Promo Code already exists" });
+        } else {
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
     }
 });
 

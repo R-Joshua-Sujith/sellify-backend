@@ -32,7 +32,8 @@ const orderSchema = new mongoose.Schema({
     upiID: {
         type: String, required: false
     },
-
+    promoName: { type: String, required: false, default: "Not Applicable" },
+    promoPrice: { type: String, required: false, default: 0 },
     imeiNumber: { type: String, required: false },
     finalPrice: { type: String, required: false },
     deviceBill: { type: Buffer, required: false }, // Change to Buffer type

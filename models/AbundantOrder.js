@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const abundantOrderSchema = new mongoose.Schema({
-    email: { type: String, required: true },
+    phone: { type: String, required: true },
     city: {
         type: String
     },

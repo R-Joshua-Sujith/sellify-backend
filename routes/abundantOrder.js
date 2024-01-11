@@ -5,13 +5,13 @@ const AbundantOrderModel = require("../models/AbundantOrder");
 router.post("/create-abundant-order", async (req, res) => {
     try {
         const {
-            email,
+            phone,
             city,
             productDetails,
             options
         } = req.body;
         const newOrder = new AbundantOrderModel({
-            email,
+            phone,
             city,
             productDetails,
             options
@@ -46,7 +46,7 @@ router.get('/get-all-orders', async (req, res) => {
         }
 
         const allOrders = await AbundantOrderModel.find(query)
-            .select('email city productDetails.productName productDetails.price status createdAt')
+            .select('phone city productDetails.productName productDetails.price status createdAt')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(pageSize));

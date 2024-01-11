@@ -1,112 +1,27 @@
 const router = require("express").Router();
 const UserModel = require("../models/User");
 const nodemailer = require('nodemailer');
+const dotenv = require("dotenv");
+const axios = require("axios")
 
-const generateNumericOTP = (length) => {
-    const digits = '0123456789';
-    let OTP = '';
-
-    for (let i = 0; i < length; i++) {
-        OTP += digits[Math.floor(Math.random() * 10)];
-    }
-
-    return OTP;
-};
-
-router.post('/send-otp', async (req, res) => {
-    const { email } = req.body;
-
-    // Find user by email or create a new user
-    let user = await UserModel.findOne({ email });
-
-    if (!user) {
-        // Create a new user if not found
-        user = new UserModel({ email });
-    }
-
-    // Generate OTP
-    const otp = generateNumericOTP(6); // Adjust the length as needed
-    const otpExpiry = Date.now() + 600000; // 10 minutes
-
-    // Save OTP and its expiry to user
-    user.otp = otp;
-    user.otpExpiry = otpExpiry;
-
-    try {
-        await user.save();
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: 'Failed to save user' });
-    }
-
-    // Send email with OTP
-    const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: 'joshuasujith14@gmail.com',
-            pass: 'ncbbbbtrcqqjuvpc',
-        },
-    });
-
-    const mailOptions = {
-        from: 'joshuasujith14@gmail.com',
-        to: email,
-        subject: 'OTP Verification',
-        text: `You are receiving this email for OTP verification in Sellify. Your OTP is: ${otp}`,
-    };
-
-    transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-            console.log(error);
-            return res.status(500).json({ message: 'Failed to send OTP' });
-        }
-
-        res.json({ message: 'OTP Sent' });
-    });
-});
+dotenv.config();
 
 
-router.post('/login', async (req, res) => {
-    const { otp, email } = req.body;
 
-    // Find user by reset token, OTP, and email
-    const user = await UserModel.findOne({
-        email,
-        otp,
-        otpExpiry: { $gt: Date.now() },
-    });
 
-    if (!user) {
-        return res.status(400).json({ message: 'Invalid OTP or email' });
-    }
-
-    // Clear OTP and OTP expiry after successful reset
-    user.otp = undefined;
-    user.otpExpiry = undefined;
-
-    try {
-        await user.save();
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({ error: 'Server Error' });
-    }
-
-    res.json({ message: 'Login Successful' });
-});
-
-router.post('/api/users/:email', async (req, res) => {
-    const { email } = req.params;
-    const { firstName, lastName, phone, addPhone, address, zipCode, city } = req.body;
+router.post('/api/users/:phone', async (req, res) => {
+    const { phone } = req.params;
+    const { firstName, lastName, email, addPhone, address, zipCode, city } = req.body;
 
     try {
         // Find the user by email
-        const existingUser = await UserModel.findOne({ email });
+        const existingUser = await UserModel.findOne({ phone });
 
         if (existingUser) {
             // Update the existing user's information
             existingUser.firstName = firstName;
             existingUser.lastName = lastName;
-            existingUser.phone = phone;
+            existingUser.email = email;
             existingUser.addPhone = addPhone || '';
             existingUser.address = address;
             existingUser.zipCode = zipCode;
@@ -174,12 +89,12 @@ router.post('/api/users-fill/:email', async (req, res) => {
     }
 });
 
-router.get('/api/users/:email', async (req, res) => {
-    const { email } = req.params;
+router.get('/api/users/:phone', async (req, res) => {
+    const { phone } = req.params;
 
     try {
         // Find the user by email
-        const user = await UserModel.findOne({ email });
+        const user = await UserModel.findOne({ phone });
 
         if (user) {
             const userData = {
@@ -296,13 +211,13 @@ router.delete('/delete/users/:userId', async (req, res) => {
     }
 });
 
-router.put('/api/users/:email/city', async (req, res) => {
+router.put('/api/users/:phone/city', async (req, res) => {
     try {
-        const email = req.params.email;
+        const phone = req.params.phone;
         const newCity = req.body.city;
 
         // Find the user by ID
-        const user = await UserModel.findOne({ email });
+        const user = await UserModel.findOne({ phone });
 
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
@@ -321,12 +236,12 @@ router.put('/api/users/:email/city', async (req, res) => {
     }
 });
 
-router.get('/api/users/:email/city', async (req, res) => {
+router.get('/api/users/:phone/city', async (req, res) => {
     try {
-        const email = req.params.email;
+        const phone = req.params.phone;
 
         // Find the user by ID and select only the city field
-        const user = await UserModel.findOne({ email }).select('city');
+        const user = await UserModel.findOne({ phone }).select('city');
 
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
@@ -338,5 +253,101 @@ router.get('/api/users/:email/city', async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
+
+router.get('/api/user/promo-status/:email', async (req, res) => {
+    try {
+        const { email } = req.params;
+
+        // Find the user by email
+        const user = await UserModel.findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Respond with the promoStatus
+        res.json({ promoStatus: user.promoStatus });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+const sendSMS = async (mobileNumber) => {
+    try {
+        const otp = Math.floor(1000 + Math.random() * 9000);
+        const otpExpiry = Date.now() + 600000;
+        const apiUrl = 'https://control.msg91.com/api/v5/flow/';
+        const headers = {
+            "authkey": "413319Apv4eIy5qvDs659e4869P1"
+        }
+        const response = await axios.post(apiUrl,
+            {
+                "template_id": "659cb356d6fc05410c2c0a62",
+                "short_url": "0",
+                "recipients": [
+                    {
+                        "mobiles": mobileNumber,
+                        "var": otp
+                    }
+                ]
+            }
+            , { headers })
+
+
+        return { otp, otpExpiry };
+    } catch (error) {
+        console.error(error);
+        throw error;
+    }
+};
+
+router.post('/send-sms', async (req, res) => {
+    const { mobileNumber } = req.body;
+    const formattedMobileNumber = `91${mobileNumber}`;
+    try {
+        const { otp, otpExpiry } = await sendSMS(formattedMobileNumber);
+        let user = await UserModel.findOne({ phone: mobileNumber });
+        if (!user) {
+            user = new UserModel({ phone: mobileNumber })
+        }
+        user.otp = otp;
+        user.otpExpiry = otpExpiry;
+        await user.save();
+        res.json({ message: "OTP Sent Successfully" });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+router.post('/sms-login', async (req, res) => {
+    const { otp, phone } = req.body;
+
+    // Find user by reset token, OTP, and email
+    const user = await UserModel.findOne({
+        phone,
+        otp,
+        otpExpiry: { $gt: Date.now() },
+    });
+
+    if (!user) {
+        return res.status(400).json({ message: 'Invalid OTP or Phone' });
+    }
+
+    // Clear OTP and OTP expiry after successful reset
+    user.otp = undefined;
+    user.otpExpiry = undefined;
+
+    try {
+        await user.save();
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Server Error' });
+    }
+
+    res.json({ message: 'Login Successful' });
+});
+
+
 
 module.exports = router;

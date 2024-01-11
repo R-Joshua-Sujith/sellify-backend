@@ -12,6 +12,8 @@ const UserSchema = new mongoose.Schema({
     address: { type: String, default: '' },
     zipCode: { type: String, default: '' },
     city: { type: String, default: '' },
+    promoStatus: { type: String, default: "false" },
+    promoCodes: { type: [String], default: [] }
 });
 
 const UserModel = mongoose.model('User', UserSchema);

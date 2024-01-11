@@ -2,7 +2,9 @@ const router = require("express").Router();
 const OrderModel = require("../models/Order");
 const CounterModel = require("../models/Counter")
 const AbundantOrderModel = require("../models/AbundantOrder");
+const UserModel = require("../models/User")
 const multer = require('multer');
+
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
@@ -55,9 +57,19 @@ router.post('/create-order', async (req, res) => {
             productDetails,
             options,
             modeofpayment,
-            upiID
+            upiID,
+            promoStatus,
+            promoName,
+            promoPrice
         } = req.body.updatedOrderDetails;
 
+
+        if (promoStatus === 'true') {
+            if (promoStatus === 'true') {
+                // If promoStatus is true, update the user model to push promoName into promoCodes
+                await UserModel.findOneAndUpdate({ phone }, { $push: { promoCodes: promoName } });
+            }
+        }
         const orderID = await generateCustomID();
 
         // Create a new order instance using the OrderModel
@@ -75,13 +87,15 @@ router.post('/create-order', async (req, res) => {
             productDetails,
             options,
             modeofpayment,
-            upiID
+            upiID,
+            promoName,
+            promoPrice
         });
 
         // Save the new order to the database
         const savedOrder = await newOrder.save();
         const deletedAbundantOrder = await AbundantOrderModel.deleteMany({
-            email,
+            phone,
             'productDetails.productName': productDetails.productName,
         });
 
@@ -209,17 +223,17 @@ router.put('/api/orders/:orderId/complete', upload.fields([
 router.get('/api/get-invoice-data/:orderId', async (req, res) => {
     try {
         const orderId = req.params.orderId;
-        const order = await OrderModel.findById(orderId).select('orderID firstName lastName email phone address zipCode city productDetails imeiNumber finalPrice ');
+        const order = await OrderModel.findById(orderId).select('orderID firstName lastName email phone address zipCode city productDetails imeiNumber finalPrice promoName promoPrice');
 
         if (!order) {
             return res.status(404).send('Order not found');
         }
 
         // Extract necessary details
-        const { orderID, firstName, lastName, email, phone, address, zipCode, city, productDetails, imeiNumber, finalPrice } = order;
+        const { orderID, firstName, lastName, email, phone, address, zipCode, city, productDetails, imeiNumber, finalPrice, promoName, promoPrice } = order;
 
         // Send JSON response
-        res.json({ orderID, firstName, lastName, email, phone, address, zipCode, city, productDetails, imeiNumber, finalPrice });
+        res.json({ orderID, firstName, lastName, email, phone, address, zipCode, city, productDetails, imeiNumber, finalPrice, promoName, promoPrice });
     } catch (error) {
         console.error(error);
         res.status(500).send('Internal Server Error');
@@ -241,6 +255,8 @@ router.get('/get-all-orders', async (req, res) => {
                 { firstName: { $regex: search, $options: 'i' } },
                 { zipCode: { $regex: search, $options: 'i' } },
                 { city: { $regex: search, $options: 'i' } },
+                { status: { $regex: search, $options: 'i' } },
+
             ];
         }
 
@@ -252,7 +268,7 @@ router.get('/get-all-orders', async (req, res) => {
         }
 
         const allOrders = await OrderModel.find(query)
-            .select('orderID firstName phone productDetails.productName productDetails.price status zipCode city scheduledPickup.pickupDate scheduledPickup.pickupTime email')
+            .select('orderID firstName phone productDetails.productName productDetails.price status zipCode city scheduledPickup.pickupDate scheduledPickup.pickupTime email promoPrice')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(pageSize));
@@ -272,16 +288,18 @@ router.get('/get-all-orders', async (req, res) => {
 
 
 
-router.get('/user-orders/:email', async (req, res) => {
+router.get('/user-orders/:phone', async (req, res) => {
     try {
-        const { email } = req.params;
+        const { phone } = req.params;
 
         // Fetch orders based on user's email with selected fields
-        const orders = await OrderModel.find({ email }).select({
+        const orders = await OrderModel.find({ phone }).select({
             _id: 1, // include the id
             'orderID': 1,
             'productDetails.productName': 1,
             'productDetails.price': 1,
+            'promoPrice': 1,
+            'promoName': 1,
             status: 1,
         }).sort({ createdAt: -1 })
 

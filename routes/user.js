@@ -345,7 +345,7 @@ router.post('/sms-login', async (req, res) => {
         return res.status(500).json({ error: 'Server Error' });
     }
 
-    res.json({ message: 'Login Successful' });
+    res.json({ user });
 });
 
 

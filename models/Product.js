@@ -8,6 +8,7 @@ const optionSchema = new mongoose.Schema({
 const ProductSchema = new mongoose.Schema({
     productImage: { type: String },
     basePrice: { type: Number },
+    estimatedPrice: { type: Number },
     variant: { type: String },
     model: { type: String },
     brandName: { type: String },

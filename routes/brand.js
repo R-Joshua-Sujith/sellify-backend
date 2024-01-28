@@ -77,6 +77,42 @@ router.delete('/delete-brand/:id', async (req, res) => {
 });
 
 
+// router.get('/brands-category/:categoryType', async (req, res) => {
+//     try {
+//         const categoryType = req.params.categoryType;
+
+//         // Find all brands that have the specified categoryType in their series object
+//         const brands = await BrandModel.find({ [`series.${categoryType}`]: { $exists: true, $not: { $size: 0 } } });
+
+//         if (brands.length === 0) {
+//             return res.status(404).json({ error: 'No brands found for the specified category type' });
+//         }
+
+//         // Extract only the _id and brandName fields from each brand
+//         const brandNames = [];
+
+//         for (const brand of brands) {
+//             // Count the number of products for each brand with the specified categoryType
+//             const productCount = await ProductModel.countDocuments({
+//                 brandName: brand.brandName,
+//                 categoryType: categoryType
+//             });
+
+//             brandNames.push({
+//                 _id: brand._id,
+//                 brandName: brand.brandName,
+//                 brandImage: brand.brandImage,
+//                 productCount: productCount
+//             });
+//         }
+
+//         res.json(brandNames);
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).json({ error: 'Internal Server Error' });
+//     }
+// });
+
 router.get('/brands-category/:categoryType', async (req, res) => {
     try {
         const categoryType = req.params.categoryType;
@@ -89,22 +125,11 @@ router.get('/brands-category/:categoryType', async (req, res) => {
         }
 
         // Extract only the _id and brandName fields from each brand
-        const brandNames = [];
-
-        for (const brand of brands) {
-            // Count the number of products for each brand with the specified categoryType
-            const productCount = await ProductModel.countDocuments({
-                brandName: brand.brandName,
-                categoryType: categoryType
-            });
-
-            brandNames.push({
-                _id: brand._id,
-                brandName: brand.brandName,
-                brandImage: brand.brandImage,
-                productCount: productCount
-            });
-        }
+        const brandNames = brands.map(brand => ({
+            _id: brand._id,
+            brandName: brand.brandName,
+            brandImage: brand.brandImage,
+        }));
 
         res.json(brandNames);
     } catch (error) {
@@ -112,6 +137,7 @@ router.get('/brands-category/:categoryType', async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
+
 
 
 

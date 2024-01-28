@@ -49,53 +49,33 @@ router.get('/get-products/:categoryType/:brandName', async (req, res) => {
         }
 
         const products = await ProductModel.find({ categoryType, brandName });
-        const category = await CategoryModel.find({ category_type: categoryType })
-        const data = [];
-        console.log(category)
-        if (category[0].attributes) {
-            category[0].attributes.forEach(attribute => {
-                attribute.options.forEach(option => {
-                    data.push({
-                        optionHeading: option.optionHeading,
-                        optionType: option.optionType,
-                    })
-                })
-            })
-        }
-        if (category[0].sections) {
-            category[0].sections.forEach(section => {
+        // const category = await CategoryModel.find({ category_type: categoryType })
+        // const data = [];
+        // console.log(category)
+        // if (category[0].attributes) {
+        //     category[0].attributes.forEach(attribute => {
+        //         attribute.options.forEach(option => {
+        //             data.push({
+        //                 optionHeading: option.optionHeading,
+        //                 optionType: option.optionType,
+        //             })
+        //         })
+        //     })
+        // }
+        // if (category[0].sections) {
+        //     category[0].sections.forEach(section => {
 
-                section.options.forEach(option => {
-                    data.push({
-                        optionHeading: option.optionHeading,
-                        optionType: option.optionType,
-                    });
-                });
-            });
-        }
-        // categoryDocument.attributes.forEach((attribute) => {
-        //     // Iterate through options in the attribute
-        //     attribute.options.forEach((option) => {
-        //         data.push({
-        //             option: option.optionHeading,
-        //             optionType: option.optionType,
+        //         section.options.forEach(option => {
+        //             data.push({
+        //                 optionHeading: option.optionHeading,
+        //                 optionType: option.optionType,
+        //             });
         //         });
         //     });
-        // });
-
-        // // Iterate through sections
-        // categoryDocument.sections.forEach((section) => {
-        //     // Iterate through options in the section
-        //     section.options.forEach((option) => {
-        //         data.push({
-        //             attribute: option.optionHeading,
-        //             optionType: option.optionType,
-        //         });
-        //     });
-        // });
+        // }
 
 
-        res.json({ products, data });
+        res.json(products);
     } catch (error) {
         res.status(500).json({ error: 'Internal Server error' });
         console.log(error)
@@ -268,13 +248,13 @@ router.post('/api/products/bulk-upload', upload.single('file'), async (req, res)
         }
         const allHeaders = excelData[0];
 
-        const dynamic = allHeaders.filter((item) => !['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'variant', 'basePrice', 'productImage', 'bestSelling'].includes(item));
+        const dynamic = allHeaders.filter((item) => !['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'variant', 'basePrice', 'estimatedPrice', 'productImage', 'bestSelling'].includes(item));
 
         for (const row of excelData.slice(1)) {
             const uniqueIdentifier = row[0];
             const existingItem = await ProductModel.findOne({ _id: uniqueIdentifier })
             const dynamicOptions = [];
-            let i = 9;
+            let i = 10;
             for (let x of dynamic) {
                 dynamicOptions.push({
                     optionHeading: x,
@@ -290,8 +270,9 @@ router.post('/api/products/bulk-upload', upload.single('file'), async (req, res)
                 existingItem.model = row[4];
                 existingItem.variant = row[5];
                 existingItem.basePrice = row[6];
-                existingItem.productImage = row[7];
-                existingItem.bestSelling = row[8];
+                existingItem.estimatedPrice = row[7]
+                existingItem.productImage = row[8];
+                existingItem.bestSelling = row[9];
                 existingItem.dynamicFields = dynamicOptions;
 
                 await existingItem.save();
@@ -303,8 +284,9 @@ router.post('/api/products/bulk-upload', upload.single('file'), async (req, res)
                     model: row[4],
                     variant: row[5],
                     basePrice: row[6],
-                    productImage: row[7],
-                    bestSelling: row[8],
+                    estimatedPrice: row[7],
+                    productImage: row[8],
+                    bestSelling: row[9],
                     dynamicFields: dynamicOptions,
                 })
                 await newProduct.save();
@@ -336,7 +318,7 @@ router.get('/api/products/bulk-download/:categoryType', async (req, res) => {
         const excelData = [];
 
         // Add headers to the Excel data
-        const headers = ['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'variant', 'basePrice', 'productImage', 'bestSelling'];
+        const headers = ['_id', 'categoryType', 'brandName', 'seriesName', 'model', 'variant', 'basePrice', 'estimatedPrice', 'productImage', 'bestSelling'];
 
         // Assuming dynamicFields is an array in each product document
         if (products[0].dynamicFields) {
@@ -349,7 +331,7 @@ router.get('/api/products/bulk-download/:categoryType', async (req, res) => {
 
         // Add product data to the Excel data
         products.forEach(product => {
-            const rowData = [product._id.toString(), product.categoryType, product.brandName, product.seriesName, product.model, product.variant, product.basePrice, product.productImage, product.bestSelling];
+            const rowData = [product._id.toString(), product.categoryType, product.brandName, product.seriesName, product.model, product.variant, product.basePrice, product.estimatedPrice, product.productImage, product.bestSelling];
 
             // Add dynamic field values to the row
             if (product.dynamicFields) {
